@@ -160,9 +160,6 @@ npm run batch-test
 - `GET /api/status/[jobId]` - Check discovery progress
 - `POST /api/validate-username` - Validate creator username format
 
-### Integration API
-- `POST /api/faves/import` - Import discovered links to Faves platform
-
 ### Response Format
 ```json
 {
@@ -178,7 +175,6 @@ npm run batch-test
   "allLinks": [...],
   "intelligenceReport": {...},
   "recommendation": {
-    "favesPriority": "high",
     "reason": "High-value creator with significant reach",
     "estimatedValue": 150000
   }
