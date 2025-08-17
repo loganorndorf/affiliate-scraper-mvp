@@ -8,7 +8,14 @@
     "discover": "ts-node src/orchestrators/universalDiscovery.ts",
     "batch-test": "ts-node src/testing/batchTester.ts",
     "test": "ts-node src/index.ts cristiano",
-    "dev": "nodemon --exec ts-node src/index.ts"
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "test:reliability": "ts-node tests/run.ts",
+    "test:quick": "ts-node tests/run.ts -- --mode=quick",
+    "test:platform": "ts-node tests/run.ts -- --platform",
+    "test:fixed": "ts-node tests/test-fixed-extractors.ts",
+    "test:all": "ts-node tests/test-all-platforms.ts",
+    "test:all:quick": "ts-node tests/test-all-platforms.ts -- --mode=quick",
+    "monitor": "ts-node tests/monitoring/monitor.ts"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +30,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "chalk": "^5.6.0",
+    "cli-table3": "^0.6.5",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
