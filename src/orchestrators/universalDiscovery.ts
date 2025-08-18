@@ -3,7 +3,7 @@ import { BeaconsExtractor } from '../extractors/beacons';
 import { TikTokExtractor } from '../extractors/social/tiktok';
 import { YouTubeExtractor } from '../extractors/social/youtube';
 import { TwitterExtractor } from '../extractors/social/twitter';
-import { InstagramExtractor } from '../extractors/instagram';
+import { InstagramMobileAPIExtractor } from '../extractors/instagramMobileAPI';
 import { WebsiteDiscovery, WebsiteResult } from '../extractors/website';
 import { AmazonStorefrontExtractor, AmazonStorefrontResult } from '../extractors/amazonStorefront';
 import { LinkExpander } from '../processors/linkExpander';
@@ -30,6 +30,15 @@ export interface PlatformData {
   amazonStorefrontData?: AmazonStorefrontResult;
   error?: string;
   processingTime: number;
+  v2Metadata?: {
+    version: 'v1' | 'v2';
+    method?: string;
+    postsRetrieved?: number;
+    affiliatesFound?: number;
+    userId?: string;
+    nextCursor?: string;
+    extractorVersion?: string;
+  };
 }
 
 export interface ProcessedLink extends ExtractedLink {
@@ -55,7 +64,7 @@ export interface UniversalCreatorProfile {
     usingCompetitor: string | null;
   };
   recommendation: {
-    favesPriority: 'high' | 'medium' | 'low';
+    priority: 'high' | 'medium' | 'low';
     reason: string;
     estimatedValue: number;
   };
@@ -79,7 +88,7 @@ export class UniversalCreatorDiscovery {
   private beaconsExtractor = new BeaconsExtractor();
   private tiktokExtractor = new TikTokExtractor();
   private twitterExtractor = new TwitterExtractor();
-  private instagramExtractor = new InstagramExtractor();
+  private instagramExtractor = new InstagramMobileAPIExtractor();
   private websiteDiscovery = new WebsiteDiscovery();
   private amazonStorefrontExtractor = new AmazonStorefrontExtractor();
   private linkExpander = new LinkExpander();
@@ -87,10 +96,13 @@ export class UniversalCreatorDiscovery {
   private intelligenceAnalyzer = new CreatorIntelligenceAnalyzer();
   private youtubeExtractor?: YouTubeExtractor;
   
-  constructor(youtubeApiKey?: string) {
+  constructor(youtubeApiKey?: string, scraperAPIKey?: string) {
     if (youtubeApiKey) {
       this.youtubeExtractor = new YouTubeExtractor(youtubeApiKey);
     }
+    
+    // Initialize Instagram V2 extractor with ScraperAPI fallback
+    this.instagramExtractor = new InstagramMobileAPIExtractor(scraperAPIKey);
   }
   
   async discoverCreator(query: string, options: DiscoveryOptions = {}): Promise<UniversalCreatorProfile> {
@@ -228,23 +240,41 @@ export class UniversalCreatorDiscovery {
             
           case 'instagram':
             const instagramResult = await Promise.race([
-              this.instagramExtractor.getProfile(handles.instagram),
+              this.instagramExtractor.extract(handles.instagram, {
+                detectAffiliates: true,
+                maxPosts: 18,
+                useFallback: true
+              }),
               new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
             ]) as any;
+            
+            const profile = instagramResult.success ? instagramResult.profile : null;
+            const bioLink = profile?.bioLink;
+            const followerCount = profile?.followers || 0;
+            
             result = {
               platform: 'instagram' as Platform,
-              success: !!instagramResult,
-              profile: instagramResult,
-              links: instagramResult?.bioLink ? [{
+              success: instagramResult.success,
+              profile: profile,
+              links: bioLink ? [{
                 title: 'Instagram Bio Link',
-                originalUrl: instagramResult.bioLink,
+                originalUrl: bioLink,
                 expandedUrl: '',
                 type: LinkType.UNKNOWN,
-                source: 'bio',
+                source: 'bio' as const,
                 confidence: 90
               }] : [],
-              metrics: { followers: instagramResult?.followerCount || 0 },
-              processingTime: Date.now() - startTime
+              metrics: { 
+                followers: followerCount,
+                engagement: profile?.posts?.length || 0
+              },
+              processingTime: Date.now() - startTime,
+              v2Metadata: {
+                version: 'v2' as const,
+                method: instagramResult.method || 'mobile_api',
+                postsRetrieved: profile?.posts?.length || 0,
+                affiliatesFound: profile?.affiliateAnalysis?.totalAffiliates || 0
+              }
             };
             break;
             
@@ -452,7 +482,7 @@ export class UniversalCreatorDiscovery {
   
   private generateRecommendationFromIntelligence(intelligenceReport: CreatorIntelligenceReport) {
     return {
-      favesPriority: intelligenceReport.favesPriority.toLowerCase() as 'high' | 'medium' | 'low',
+      priority: 'medium' as const, // Default priority since favesPriority removed
       reason: intelligenceReport.actionableInsights.personalizedPitch,
       estimatedValue: intelligenceReport.valueEstimation.totalValue
     };
@@ -482,9 +512,9 @@ export class UniversalCreatorDiscovery {
       this.beaconsExtractor.close(),
       this.tiktokExtractor.close(),
       this.twitterExtractor.close(),
-      this.instagramExtractor.close(),
       this.websiteDiscovery.close(),
       this.amazonStorefrontExtractor.close()
+      // Instagram V2 extractor doesn't need cleanup (no browser)
     ]);
   }
 }
@@ -504,7 +534,8 @@ async function main() {
   }
   
   const youtubeApiKey = process.env.YOUTUBE_API_KEY;
-  const discovery = new UniversalCreatorDiscovery(youtubeApiKey);
+  const scraperAPIKey = process.env.SCRAPER_API_KEY;
+  const discovery = new UniversalCreatorDiscovery(youtubeApiKey, scraperAPIKey);
   
   try {
     const result = await discovery.discoverCreator(query);
@@ -520,9 +551,9 @@ async function main() {
     console.log(`Primary Platform: ${result.summary.primaryPlatform}`);
     console.log(`Using Competitor: ${result.summary.usingCompetitor || 'None'}`);
     
-    console.log('\n🎯 FAVES RECOMMENDATION');
+    console.log('\n🎯 ANALYSIS SUMMARY');
     console.log('─'.repeat(30));
-    console.log(`Priority: ${result.recommendation.favesPriority.toUpperCase()}`);
+    console.log(`Priority: ${result.recommendation.priority.toUpperCase()}`);
     console.log(`Reason: ${result.recommendation.reason}`);
     console.log(`Estimated Annual Value: $${result.recommendation.estimatedValue.toLocaleString()}`);
     

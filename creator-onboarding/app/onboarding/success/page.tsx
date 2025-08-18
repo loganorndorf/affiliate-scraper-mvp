@@ -123,18 +123,27 @@ export default function SuccessPage() {
     isLoading: sessionLoading,
     toggleLinkSelection,
     completeOnboarding,
-    resetSession
+    resetSession,
+    updateSession
   } = useOnboardingSession();
   
   const [links, setLinks] = useState<DiscoveredLink[]>([]);
   const [expandedPlatforms, setExpandedPlatforms] = useState<string[]>(['instagram']);
-  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [editingLink, setEditingLink] = useState<EditingLink | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicatesRemoved] = useState(Math.floor(Math.random() * 10) + 5);
-  const [importError, setImportError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [showAddLinkModal, setShowAddLinkModal] = useState(false);
+  const [newLink, setNewLink] = useState({
+    url: '',
+    title: '',
+    platform: 'instagram',
+    isPrimary: false
+  });
+  const [addLinkError, setAddLinkError] = useState<string | null>(null);
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -271,14 +280,76 @@ export default function SuccessPage() {
     );
   };
 
-  const handleImport = async () => {
-    setIsImporting(true);
-    setImportError(null);
+  const addNewLink = () => {
+    setAddLinkError(null);
+
+    // Validation
+    if (!newLink.url.trim()) {
+      setAddLinkError('URL is required');
+      return;
+    }
+
+    if (!newLink.title.trim()) {
+      setAddLinkError('Title is required');
+      return;
+    }
+
+    // Basic URL validation
+    try {
+      const urlToTest = newLink.url.trim();
+      // Add protocol if missing
+      const finalUrl = urlToTest.startsWith('http://') || urlToTest.startsWith('https://') 
+        ? urlToTest 
+        : `https://${urlToTest}`;
+      
+      new URL(finalUrl); // This will throw if URL is invalid
+      
+      const linkToAdd: DiscoveredLink = {
+        id: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        url: finalUrl,
+        title: newLink.title.trim(),
+        platform: newLink.platform,
+        isSelected: true,
+        isPrimary: newLink.isPrimary
+      };
+
+      // If setting as primary, remove primary from other links
+      const updatedLinks = newLink.isPrimary 
+        ? links.map(link => ({ ...link, isPrimary: false }))
+        : links;
+
+      const finalLinks = [...updatedLinks, linkToAdd];
+      setLinks(finalLinks);
+      
+      // Update session with new links
+      updateSession({ 
+        discoveredLinks: finalLinks,
+        selectedLinkIds: finalLinks.filter(l => l.isSelected).map(l => l.id)
+      });
+      
+      // Reset form and close modal
+      setNewLink({
+        url: '',
+        title: '',
+        platform: 'instagram',
+        isPrimary: false
+      });
+      setShowAddLinkModal(false);
+
+    } catch (error) {
+      setAddLinkError('Please enter a valid URL');
+      return;
+    }
+  };
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    setIsExporting(true);
+    setExportError(null);
     
     try {
-      console.log('Importing links to Faves:', selectedLinks);
+      console.log(`Exporting ${selectedLinks.length} links as ${format.toUpperCase()}`);
       
-      const response = await fetch('/api/faves/import', {
+      const response = await fetch('/api/export/links', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -288,57 +359,47 @@ export default function SuccessPage() {
             url: link.url,
             title: link.title,
             platform: link.platform,
-            isPrimary: link.isPrimary
+            isPrimary: link.isPrimary,
+            affiliateDetected: link.affiliateDetected,
+            estimatedValue: link.estimatedValue
           })),
           creatorInfo: {
             username: session.username,
             platforms: session.discoveryResults?.platforms || {}
           },
-          jobId: session.jobId
+          format
         }),
       });
 
       const result = await response.json();
       
       if (!result.success) {
-        setImportError(result.error?.message || 'Import failed');
+        setExportError(result.error?.message || 'Export failed');
         return;
       }
       
+      // Trigger download
+      const a = document.createElement('a');
+      a.href = result.data.downloadUrl;
+      a.download = result.data.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
       // Show success message
-      alert(`🎉 Successfully imported ${result.data.importedCount} links to Faves!`);
+      alert(`🎉 Successfully exported ${result.data.exportedCount} links as ${format.toUpperCase()}!`);
       
-      // Complete onboarding and clear session
+      // Complete onboarding
       completeOnboarding();
-      setTimeout(() => resetSession(), 1000);
-      
-      // Redirect to Faves dashboard
-      if (result.data.favesRedirectUrl) {
-        window.location.href = result.data.favesRedirectUrl;
-      }
       
     } catch (error) {
-      console.error('Import failed:', error);
-      setImportError('Network error - please check your connection and try again');
+      console.error('Export error:', error);
+      setExportError('Failed to export links. Please try again.');
     } finally {
-      setIsImporting(false);
+      setIsExporting(false);
     }
   };
 
-  const handleDownloadCSV = () => {
-    const csv = [
-      'Platform,URL,Title,Primary',
-      ...selectedLinks.map(link => `${link.platform},${link.url},${link.title || ''},${link.isPrimary ? 'Yes' : 'No'}`)
-    ].join('\n');
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${session.username}_links.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   if (sessionLoading) {
     return (
@@ -378,15 +439,15 @@ export default function SuccessPage() {
               </h1>
               
               <p className="text-xl text-gray-600 mb-8">
-                We couldn't find any affiliate links for @{session.username}
+                We couldn&apos;t find any affiliate links for @{session.username}
               </p>
               
               <div className="bg-orange-50 border border-orange-200 rounded-xl p-6 text-left">
                 <h3 className="font-semibold text-orange-800 mb-3">This could happen because:</h3>
                 <ul className="text-sm text-orange-700 space-y-2">
                   <li>• Your profiles might be private</li>
-                  <li>• You haven't shared affiliate links yet</li>
-                  <li>• Links are in stories/bio that we can't access</li>
+                  <li>• You haven&apos;t shared affiliate links yet</li>
+                  <li>• Links are in stories/bio that we can&apos;t access</li>
                   <li>• You use different usernames on different platforms</li>
                 </ul>
               </div>
@@ -486,7 +547,7 @@ export default function SuccessPage() {
               <span>•</span>
               <span>{duplicatesRemoved} duplicates removed</span>
               <span>•</span>
-              <span>Ready to import</span>
+              <span>Ready to export</span>
             </div>
           </motion.div>
 
@@ -609,10 +670,11 @@ export default function SuccessPage() {
               </div>
             </DndContext>
           </motion.div>
+        </div>
 
-          {/* Import Error */}
+        <div className="max-w-4xl mx-auto">
           <AnimatePresence>
-            {importError && (
+            {exportError && (
               <motion.div
                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -624,21 +686,21 @@ export default function SuccessPage() {
                   <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <h4 className="text-sm font-medium text-red-800">
-                      Import Failed
+                      Export Failed
                     </h4>
                     <p className="text-sm text-red-700 mt-1">
-                      {importError}
+                      {exportError}
                     </p>
                     <div className="mt-3 text-xs text-red-600">
                       <ul className="list-disc list-inside space-y-1">
                         <li>Your links are still available here</li>
-                        <li>You can download as CSV and import manually</li>
-                        <li>Try the import again in a moment</li>
+                        <li>You can try a different export format</li>
+                        <li>Try the export again in a moment</li>
                       </ul>
                     </div>
                   </div>
                   <button
-                    onClick={() => setImportError(null)}
+                    onClick={() => setExportError(null)}
                     className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors"
                   >
                     <X className="h-4 w-4" />
@@ -648,7 +710,6 @@ export default function SuccessPage() {
             )}
           </AnimatePresence>
 
-          {/* Action Buttons */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -656,8 +717,8 @@ export default function SuccessPage() {
             className="flex flex-col sm:flex-row gap-4"
           >
             <motion.button
-              onClick={handleImport}
-              disabled={selectedLinks.length === 0 || isImporting}
+              onClick={() => handleExport('json')}
+              disabled={selectedLinks.length === 0 || isExporting}
               whileHover={{ scale: selectedLinks.length > 0 ? 1.02 : 1 }}
               whileTap={{ scale: selectedLinks.length > 0 ? 0.98 : 1 }}
               className={`flex-1 py-4 px-6 text-lg font-semibold rounded-xl transition-all duration-200 flex items-center justify-center space-x-2 ${
@@ -666,21 +727,24 @@ export default function SuccessPage() {
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
             >
-              {isImporting ? (
+              {isExporting ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Importing to Faves...</span>
+                  <span>Exporting...</span>
                 </>
               ) : (
                 <>
-                  <span>Import {selectedLinks.length} Links to Faves</span>
-                  <ExternalLink className="h-5 w-5" />
+                  <span>Export {selectedLinks.length} Links (JSON)</span>
+                  <Download className="h-5 w-5" />
                 </>
               )}
             </motion.button>
 
             <button
-              onClick={() => {/* TODO: Add more links manually */}}
+              onClick={() => {
+                setAddLinkError(null);
+                setShowAddLinkModal(true);
+              }}
               className="px-6 py-4 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2"
             >
               <Plus className="h-5 w-5" />
@@ -688,22 +752,28 @@ export default function SuccessPage() {
             </button>
             
             <button
-              onClick={handleDownloadCSV}
-              disabled={selectedLinks.length === 0}
+              onClick={() => handleExport('csv')}
+              disabled={selectedLinks.length === 0 || isExporting}
               className="px-6 py-4 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="h-5 w-5" />
-              <span>Download CSV</span>
+              <span>Export CSV</span>
             </button>
           </motion.div>
 
           {/* Alternative Actions */}
           <div className="mt-8 text-center space-y-4">
-            <Link href="/onboarding" className="text-blue-600 hover:text-blue-700 font-medium">
+            <button 
+              onClick={() => {
+                resetSession();
+                router.push('/onboarding');
+              }}
+              className="text-blue-600 hover:text-blue-700 font-medium underline bg-transparent border-none cursor-pointer"
+            >
               Start over with different username
-            </Link>
+            </button>
             <div className="text-gray-500 text-sm">
-              Or manually add more links in Faves after import
+              Links exported for use in your preferred platform
             </div>
           </div>
           
@@ -786,6 +856,132 @@ export default function SuccessPage() {
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       Save Changes
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Add Link Modal */}
+          <AnimatePresence>
+            {showAddLinkModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+                onClick={() => setShowAddLinkModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white rounded-2xl p-6 w-full max-w-md"
+                >
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold text-gray-900">Add New Link</h3>
+                    <button
+                      onClick={() => {
+                        setAddLinkError(null);
+                        setShowAddLinkModal(false);
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  
+                  {addLinkError && (
+                    <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50">
+                      <div className="flex items-center space-x-2">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <span className="text-sm text-red-700">{addLinkError}</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        URL <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="url"
+                        value={newLink.url}
+                        onChange={(e) => setNewLink(prev => ({...prev, url: e.target.value}))}
+                        onKeyDown={(e) => e.key === 'Enter' && newLink.url.trim() && newLink.title.trim() && addNewLink()}
+                        placeholder="https://example.com/your-link"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Title/Description <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newLink.title}
+                        onChange={(e) => setNewLink(prev => ({...prev, title: e.target.value}))}
+                        onKeyDown={(e) => e.key === 'Enter' && newLink.url.trim() && newLink.title.trim() && addNewLink()}
+                        placeholder="My Affiliate Link"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Platform
+                      </label>
+                      <select
+                        value={newLink.platform}
+                        onChange={(e) => setNewLink(prev => ({...prev, platform: e.target.value}))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="instagram">Instagram</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="youtube">YouTube</option>
+                        <option value="twitter">Twitter</option>
+                        <option value="linktree">Linktree</option>
+                        <option value="beacons">Beacons</option>
+                        <option value="website">Website</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="primary-new"
+                        checked={newLink.isPrimary}
+                        onChange={(e) => setNewLink(prev => ({...prev, isPrimary: e.target.checked}))}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="primary-new" className="text-sm text-gray-700">
+                        Set as primary link
+                      </label>
+                      <Star className="h-4 w-4 text-yellow-500" />
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-3 mt-6">
+                    <button
+                      onClick={() => {
+                        setAddLinkError(null);
+                        setShowAddLinkModal(false);
+                      }}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={addNewLink}
+                      disabled={!newLink.url.trim() || !newLink.title.trim()}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add Link
                     </button>
                   </div>
                 </motion.div>

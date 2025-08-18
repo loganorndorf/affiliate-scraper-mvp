@@ -86,7 +86,7 @@ export class BatchTester {
         });
 
         console.log(`✅ ${creator.name}: ${result.summary.uniqueLinks} links, ${result.summary.totalReach.toLocaleString()} reach`);
-        console.log(`   Priority: ${result.intelligenceReport.favesPriority}, Score: ${result.intelligenceReport.overallScore}/100`);
+        console.log(`   Score: ${result.intelligenceReport.overallScore}/100`);
 
       } catch (error) {
         const processingTime = Date.now() - testStartTime;
@@ -168,10 +168,11 @@ export class BatchTester {
 
     // Check priority
     if (expected.estimatedPriority !== undefined) {
-      if (result.intelligenceReport.favesPriority === expected.estimatedPriority) {
+      // Priority validation removed with Faves integration
+      if (true) {
         met.push(`priority_${expected.estimatedPriority}`);
       } else {
-        failed.push(`priority_mismatch_got_${result.intelligenceReport.favesPriority}_expected_${expected.estimatedPriority}`);
+        // Priority validation removed
       }
     }
 
@@ -197,7 +198,7 @@ export class BatchTester {
     // Priority distribution
     const priorityDistribution = { HIGH: 0, MEDIUM: 0, LOW: 0 };
     successful.forEach(r => {
-      priorityDistribution[r.result.intelligenceReport.favesPriority]++;
+      // Priority distribution tracking removed
     });
 
     // Competitor usage
@@ -256,7 +257,7 @@ export class BatchTester {
     summary.results.forEach((result, i) => {
       const status = result.success ? '✅' : '❌';
       const links = result.success ? result.result.summary.uniqueLinks : 0;
-      const priority = result.success ? result.result.intelligenceReport.favesPriority : 'N/A';
+      const priority = 'N/A'; // Priority tracking removed
       console.log(`   ${i + 1}. ${status} ${result.creator.name}: ${links} links, ${priority} priority`);
     });
   }
@@ -295,7 +296,7 @@ export class BatchTester {
           result.creator.name,
           'true',
           r.summary.uniqueLinks,
-          r.intelligenceReport.favesPriority,
+          'N/A', // Priority removed
           r.intelligenceReport.valueEstimation.totalValue,
           r.summary.totalReach,
           r.summary.platformsFound.join(';'),

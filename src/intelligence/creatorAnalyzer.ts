@@ -69,7 +69,6 @@ export interface CreatorIntelligenceReport {
   creatorId: string;
   creatorType: CreatorType;
   overallScore: number;
-  favesPriority: Priority;
   
   platformPresence: PlatformPresence[];
   linkAggregatorAnalysis: LinkAggregatorAnalysis;
@@ -126,15 +125,12 @@ export class CreatorIntelligenceAnalyzer {
 
     const creatorType = this.classifyCreator(profile, platformPresence);
     const overallScore = this.calculateOverallScore(platformPresence, linkAggregatorAnalysis, valueEstimation);
-    const favesPriority = this.determineFavesPriority(overallScore, linkAggregatorAnalysis, valueEstimation);
-
-    console.log(`✅ Intelligence analysis complete - Priority: ${favesPriority}, Score: ${overallScore}`);
+    console.log(`✅ Intelligence analysis complete - Score: ${overallScore}`);
 
     return {
       creatorId: profile.searchQuery,
       creatorType,
       overallScore,
-      favesPriority,
       platformPresence,
       linkAggregatorAnalysis,
       valueEstimation,
@@ -257,10 +253,10 @@ export class CreatorIntelligenceAnalyzer {
     return {
       directCompetitors: competitors.map(c => this.getCompetitorName(c)),
       competitorFeatures: this.getCompetitorFeatures(competitors),
-      uniqueSellingProps: this.getFavesUSPs(competitors),
+      uniqueSellingProps: this.getGenericUSPs(competitors),
       marketPosition: this.assessMarketPosition(profile.summary.totalReach),
       switchingBarriers: this.identifySwitchingBarriers(linkAnalysis),
-      competitiveAdvantages: this.identifyFavesAdvantages(competitors, profile)
+      competitiveAdvantages: this.identifyGenericAdvantages(competitors, profile)
     };
   }
 
@@ -291,32 +287,32 @@ export class CreatorIntelligenceAnalyzer {
 
     // Immediate actions based on current state
     if (linkAnalysis.currentAggregators.includes('linktree')) {
-      immediateActions.push("Schedule demo highlighting Faves' superior analytics and customization");
+      immediateActions.push("Consider exploring advanced link analytics platforms");
       immediateActions.push("Emphasize zero transaction fees vs Linktree's premium costs");
     }
 
     if (linkAnalysis.linkCount >= 10) {
-      immediateActions.push("Propose link organization audit - show how Faves can streamline their setup");
+      immediateActions.push("Consider link organization optimization strategies");
       shortTermOpportunities.push("Create custom branded landing page showcasing their partnerships");
     }
 
     if (value.totalValue > 10000) {
-      immediateActions.push("Present ROI analysis showing potential revenue increase with Faves");
+      immediateActions.push("Analyze potential revenue optimization opportunities");
       shortTermOpportunities.push("Offer white-glove migration service from current aggregator");
     }
 
     // Short-term opportunities
     const primaryPlatform = presence[0]?.platform;
     if (primaryPlatform === 'tiktok') {
-      shortTermOpportunities.push("Leverage TikTok's link restrictions to show Faves' bio optimization");
+      shortTermOpportunities.push("Optimize bio links for platform-specific restrictions");
     }
     if (primaryPlatform === 'youtube') {
-      shortTermOpportunities.push("Highlight Faves' YouTube integration for description link management");
+      shortTermOpportunities.push("Improve YouTube description link management");
     }
 
     // Long-term strategy
     if (presence.length >= 4) {
-      longTermStrategy.push("Position Faves as central hub for multi-platform creator economy");
+      longTermStrategy.push("Develop centralized multi-platform link strategy");
       longTermStrategy.push("Develop cross-platform analytics dashboard for unified insights");
     }
 
@@ -375,36 +371,6 @@ export class CreatorIntelligenceAnalyzer {
     return Math.round(score);
   }
 
-  private determineFavesPriority(
-    overallScore: number,
-    linkAnalysis: LinkAggregatorAnalysis,
-    value: ValueEstimation
-  ): Priority {
-    // HIGH priority conditions
-    if (linkAnalysis.currentAggregators.includes('linktree') && value.totalValue > 5000) {
-      return 'HIGH';
-    }
-    if (overallScore >= 80) {
-      return 'HIGH';
-    }
-    if (linkAnalysis.linkCount >= 15 && value.totalValue > 3000) {
-      return 'HIGH';
-    }
-
-    // MEDIUM priority conditions
-    if (overallScore >= 60) {
-      return 'MEDIUM';
-    }
-    if (linkAnalysis.currentAggregators.length > 0 && value.totalValue > 1000) {
-      return 'MEDIUM';
-    }
-    if (linkAnalysis.linkCount >= 8) {
-      return 'MEDIUM';
-    }
-
-    // LOW priority (default)
-    return 'LOW';
-  }
 
   private calculatePlatformScore(presence: PlatformPresence[]): number {
     if (presence.length === 0) return 0;
@@ -677,15 +643,13 @@ export class CreatorIntelligenceAnalyzer {
     return [...new Set(features)]; // Remove duplicates
   }
 
-  private getFavesUSPs(competitors: LinkAggregatorType[]): string[] {
+  private getGenericUSPs(competitors: LinkAggregatorType[]): string[] {
     return [
-      'Zero transaction fees on sales',
-      'Advanced attribution tracking',
-      'Multi-platform analytics dashboard',
-      'AI-powered link optimization',
-      'Real-time performance insights',
-      'Custom branded experiences',
-      'Creator economy focus'
+      'Advanced link analytics',
+      'Multi-platform integration',
+      'Custom branding options',
+      'Performance optimization',
+      'Creator-focused tools'
     ];
   }
 
@@ -712,22 +676,21 @@ export class CreatorIntelligenceAnalyzer {
     return barriers;
   }
 
-  private identifyFavesAdvantages(competitors: LinkAggregatorType[], profile: UniversalCreatorProfile): string[] {
+  private identifyGenericAdvantages(competitors: LinkAggregatorType[], profile: UniversalCreatorProfile): string[] {
     const advantages: string[] = [];
 
     if (competitors.includes('linktree')) {
-      advantages.push('No monthly fees unlike Linktree Pro');
-      advantages.push('Better revenue sharing model');
-      advantages.push('More customization options');
+      advantages.push('Alternative to subscription models');
+      advantages.push('Enhanced customization options');
     }
 
     if (profile.summary.totalReach > 1000000) {
-      advantages.push('Enterprise-grade analytics for large creators');
-      advantages.push('Dedicated account management');
+      advantages.push('Advanced analytics for large creators');
+      advantages.push('Scalable link management');
     }
 
-    advantages.push('Creator-first design philosophy');
-    advantages.push('Advanced A/B testing capabilities');
+    advantages.push('Creator-focused design');
+    advantages.push('Performance optimization tools');
 
     return advantages;
   }
@@ -832,15 +795,15 @@ export class CreatorIntelligenceAnalyzer {
     if (currentAggregator) {
       const aggregatorName = this.getCompetitorName(currentAggregator);
       pitch += ` and are currently using ${aggregatorName} to manage your ${linkAnalysis.linkCount} links.`;
-      pitch += ` Faves could help you increase your revenue by an estimated $${value.totalValue.toLocaleString()}/month with zero transaction fees`;
+      pitch += ` Advanced link management could help increase your revenue by an estimated $${value.totalValue.toLocaleString()}/month`;
       pitch += ` and better analytics than ${aggregatorName}.`;
     } else {
       pitch += ` with ${linkAnalysis.linkCount} links across platforms.`;
-      pitch += ` Faves could help you organize and monetize these links more effectively,`;
+      pitch += ` Better link organization could help monetize these links more effectively,`;
       pitch += ` potentially generating $${value.totalValue.toLocaleString()}/month in additional revenue.`;
     }
 
-    pitch += ` Would you be interested in a 15-minute demo to see how Faves can optimize your creator economy?`;
+    pitch += ` Consider exploring advanced link management solutions to optimize your creator economy.`;
 
     return pitch;
   }
@@ -996,7 +959,6 @@ if (require.main === module) {
     console.log(`Creator: ${report.creatorId}`);
     console.log(`Type: ${report.creatorType}`);
     console.log(`Overall Score: ${report.overallScore}/100`);
-    console.log(`Faves Priority: ${report.favesPriority}`);
     console.log(`Confidence: ${report.metadata.confidenceLevel}%`);
 
     console.log('\n🎯 Platform Presence:');

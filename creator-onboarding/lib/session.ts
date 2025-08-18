@@ -5,6 +5,8 @@ export interface DiscoveredLink {
   platform: string;
   isSelected: boolean;
   isPrimary?: boolean;
+  affiliateDetected?: boolean;
+  estimatedValue?: number;
 }
 
 export interface PlatformStatus {
@@ -102,6 +104,9 @@ export function loadProgress(): OnboardingSession {
 export function clearSession(): void {
   try {
     sessionStorage.removeItem(SESSION_KEY);
+    // Clear additional discovery-related storage
+    sessionStorage.removeItem('onboarding_discovery_progress');
+    sessionStorage.removeItem('onboarding_discovery_results');
   } catch (error) {
     console.error('Failed to clear session:', error);
   }
